@@ -30,6 +30,18 @@
           "root": "src/app"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {
+        "root": "src/app",
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "693935d6-8bb0-453b-b934-c703c1a49bdb"
+      }
+    },
+    "owner": "selvakumar1234"
   }
 }
