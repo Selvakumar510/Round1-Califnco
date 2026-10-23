@@ -1,0 +1,255 @@
+{
+  "name": "AquaPure — one AI product post every day",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 9,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "6b37c11a-5524-4ae3-8e6a-6d6d2dd9cb20",
+      "name": "Every day at 9 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Products",
+          "mode": "name"
+        },
+        "options": {
+          "returnAll": true
+        }
+      },
+      "id": "a709972a-c90c-4f21-8ffc-0ee37be5ab73",
+      "name": "Read product calendar",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const rows = $input.all().map(({ json }) => json).filter((row) => row.Name && row.Description);\nif (rows.length === 0) throw new Error('The Products sheet has no rows with Name and Description.');\nconst dayNumber = Math.floor(Date.now() / 86400000);\nconst row = rows[dayNumber % rows.length];\nreturn [{ json: { name: String(row.Name), description: String(row.Description), imagePrompt: String(row.ImagePrompt || `${row.Name}, ${row.Description}`) } }];"
+      },
+      "id": "91ed5df8-34fa-4b3e-8d81-f5c6f5f34e1d",
+      "name": "Select daily product",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer REPLACE_WITH_GROQ_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'system', content: 'Write one warm, concise Instagram product caption. Add 5 relevant hashtags. Do not make medical, safety, or performance claims unless they appear in the provided description. Return only the caption.' }, { role: 'user', content: `Product: ${$('Select daily product').item.json.name}\\nDetails: ${$('Select daily product').item.json.description}` }], temperature: 0.7 }) }}",
+        "options": {}
+      },
+      "id": "9cfc466d-c93e-48c5-8c92-e6c72e4f9a92",
+      "name": "Generate caption with Groq",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer REPLACE_WITH_HUGGING_FACE_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ inputs: `Photorealistic premium e-commerce product photography for ${$('Select daily product').item.json.imagePrompt}. Product centered on a clean pale aqua studio background, soft natural daylight, realistic materials, editorial composition, square image, no text, no logos, no watermark.` }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "id": "37ccce5f-9701-4e82-973c-15d188dc13cf",
+      "name": "Generate product image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 420]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.cloudinary.com/v1_1/REPLACE_WITH_CLOUD_NAME/image/upload",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            },
+            {
+              "parameterType": "formData",
+              "name": "upload_preset",
+              "value": "REPLACE_WITH_UNSIGNED_UPLOAD_PRESET"
+            },
+            {
+              "parameterType": "formData",
+              "name": "folder",
+              "value": "aquapure-instagram"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "33c54eb9-a098-43c1-80ec-df2f12031bca",
+      "name": "Host image on Cloudinary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1140, 420]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v24.0/REPLACE_WITH_INSTAGRAM_BUSINESS_ACCOUNT_ID/media",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer REPLACE_WITH_META_GRAPH_API_TOKEN"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "image_url",
+              "value": "={{ $json.secure_url }}"
+            },
+            {
+              "name": "caption",
+              "value": "={{ $('Generate caption with Groq').item.json.choices[0].message.content }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8c2316cf-e6bf-412b-85b5-590e51040f6f",
+      "name": "Create Instagram media",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1380, 420]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v24.0/REPLACE_WITH_INSTAGRAM_BUSINESS_ACCOUNT_ID/media_publish",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer REPLACE_WITH_META_GRAPH_API_TOKEN"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "creation_id",
+              "value": "={{ $json.id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "89239848-1bbc-4658-9dce-880b482a3c3c",
+      "name": "Publish Instagram post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1620, 420]
+    }
+  ],
+  "connections": {
+    "Every day at 9 AM": {
+      "main": [[{ "node": "Read product calendar", "type": "main", "index": 0 }]]
+    },
+    "Read product calendar": {
+      "main": [[{ "node": "Select daily product", "type": "main", "index": 0 }]]
+    },
+    "Select daily product": {
+      "main": [
+        [
+          { "node": "Generate caption with Groq", "type": "main", "index": 0 },
+          { "node": "Generate product image", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Generate product image": {
+      "main": [[{ "node": "Host image on Cloudinary", "type": "main", "index": 0 }]]
+    },
+    "Host image on Cloudinary": {
+      "main": [[{ "node": "Create Instagram media", "type": "main", "index": 0 }]]
+    },
+    "Create Instagram media": {
+      "main": [[{ "node": "Publish Instagram post", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata"
+  },
+  "versionId": "c97574e8-f201-4d7c-9f03-7cff6670b9bb",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
